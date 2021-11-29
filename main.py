@@ -1,4 +1,5 @@
 import json
+import sqlite3
 
 
 class Sneaker:
@@ -14,52 +15,101 @@ class Sneaker:
 
     def to_json(self):
         return {
-            "name" : self.name,
-            "price" : self.price,
-            "count" : self.count,
-            "creator" : self.creator,
-            "size" : self.size
+            "name": self.name,
+            "price": self.price,
+            "count": self.count,
+            "creator": self.creator,
+            "size": self.size
         }
 
 
 class SneakersService:
     def __init__(self):
         self._sneakers = []
+        self._dbservices = DBServices()
+        self._dbservices.create_table()
 
     def add_sneaker(self, name, price, count, creator, size):
-        self._sneakers.append(Sneaker(name, price, count, creator, size))
+        self._dbservices.add_sneaker(Sneaker(name, price, count, creator, size))
 
     def delete_sneaker(self, name):
-        delete_sneaker = None
-        for sneaker in self._sneakers:
-            if sneaker.name == name:
-                self._sneakers.remove(sneaker)
-                delete_sneaker = sneaker
-        return delete_sneaker is None
+        self._dbservices.delete_sneaker(name)
 
     def display_sneakers(self):
-        if len(self._sneakers) == 0:
-            print('Sneakers list is empty \n')
+        sneakers = self._dbservices.get_sneakers()
+        if len(sneakers) == 0:
+            print('Sneakers list is empty')
             return
-        for sneaker in self._sneakers:
-            print(str(sneaker) + '\n')
+        for sneaker in sneakers:
+            print(str(sneaker))
 
     def read_sneakers_from_file(self):
         with open('read.json', 'r') as file:
             sneakers_dict = json.load(file)
-            self._sneakers.extend(sneakers_dict['sneakers'])
+            for sneaker in sneakers_dict['sneakers']:
+                self._dbservices.add_sneaker(
+                    Sneaker(sneaker['name'], sneaker['price'], sneaker['count'], sneaker['creator'], sneaker['size'])
+                )
 
-    def save(self):
-        sneakers_list_json = []
-        for sneaker in self._sneakers:
-            sneakers_list_json.append(sneaker.to_json())
-        with open('test.json', 'w') as file:
-            json.dump({"sneakers":sneakers_list_json}, file)
 
-    def backup(self):
-        with open('test.json', 'r') as file:
-            sneakers_dict = json.load(file)
-            self._sneakers = sneakers_dict['sneakers']
+class DBServices:
+    def create_table(self):
+        try:
+            sqlite_connection = sqlite3.connect('sqlite_python.db')
+            cursor = sqlite_connection.cursor()
+            sqlite_create_table_query = '''CREATE TABLE sneakers (
+                                            id INTEGER PRIMARY KEY,
+                                            Name TEXT NOT NULL,
+                                            Price INTEGER NOT NULL,
+                                            Count INTEGER NOT NULL,
+                                            Creator TEXT NOT NULL,
+                                            Size TEXT NOT NULL);'''
+            cursor.execute(sqlite_create_table_query)
+            sqlite_connection.commit()
+            cursor.close()
+            sqlite_connection.close()
+        except sqlite3.Error as error:
+            print(error)
+
+    def add_sneaker(self, sneaker):
+        try:
+            sqlite_connection = sqlite3.connect('sqlite_python.db')
+            cursor = sqlite_connection.cursor()
+            sqlite_insert_query = f"""INSERT INTO sneakers
+                                              (Name , Price, Count, Creator, Size)  
+                                              VALUES  ("{sneaker.name}", {sneaker.price}, {sneaker.count},
+                                              "{sneaker.creator}", "{sneaker.size}")"""
+            cursor.execute(sqlite_insert_query)
+            sqlite_connection.commit()
+            cursor.close()
+            sqlite_connection.close()
+        except sqlite3.Error as error:
+            print(error)
+
+    def delete_sneaker(self, name):
+        try:
+            sqlite_connection = sqlite3.connect('sqlite_python.db')
+            cursor = sqlite_connection.cursor()
+            sqlite_insert_query = f"""DELETE from sneakers where name = {name}"""
+            cursor.execute(sqlite_insert_query)
+            sqlite_connection.commit()
+            cursor.close()
+            sqlite_connection.close()
+        except sqlite3.Error as error:
+            print(error)
+
+    def get_sneakers(self):
+        try:
+            sqlite_connection = sqlite3.connect('sqlite_python.db')
+            cursor = sqlite_connection.cursor()
+            sqlite_insert_query = """select * from sneakers"""
+            cursor.execute(sqlite_insert_query)
+            result = cursor.fetchall()
+            cursor.close()
+            sqlite_connection.close()
+            return result
+        except sqlite3.Error as error:
+            print(error)
 
 
 sneakers_service = SneakersService()
@@ -89,7 +139,6 @@ while(True):
     elif command == '4':
         sneakers_service.read_sneakers_from_file()
     elif command == '5':
-        sneakers_service.save()
         break
     else:
         print('Unknown command, please try again')

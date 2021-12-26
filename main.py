@@ -1,8 +1,22 @@
 import json
 import sqlite3
 
+from sqlalchemy import Integer, String, Column, create_engine
+from sqlalchemy.orm import declarative_base, sessionmaker
 
-class Sneaker:
+engine = create_engine("sqlite:///sqlite_python.db")
+Base = declarative_base()
+
+
+class Sneaker(Base):
+    __tablename__ = 'sneakers'
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), nullable=False)
+    count = Column(Integer, nullable=False, default=1)
+    price = Column(Integer, nullable=False)
+    size = Column(String(100), nullable=False)
+    creator = Column(String(100), nullable=False)
+
     def __init__(self, name, price, count, creator, size):
         self.name = name
         self.price = price
@@ -23,17 +37,23 @@ class Sneaker:
         }
 
 
+Base.metadata.create_all(engine)
+Session = sessionmaker()
+Session.configure(bind=engine)
+session = Session()
+
+
 class SneakersService:
     def __init__(self):
         self._sneakers = []
         self._dbservices = DBServices()
-        self._dbservices.create_table()
+        # self._dbservices.create_table()
 
     def add_sneaker(self, name, price, count, creator, size):
         self._dbservices.add_sneaker(Sneaker(name, price, count, creator, size))
 
     def delete_sneaker(self, name):
-        self._dbservices.delete_sneaker(name)
+        self._dbservices.delete_sneaker_by_name(name)
 
     def display_sneakers(self):
         sneakers = self._dbservices.get_sneakers()
@@ -53,67 +73,39 @@ class SneakersService:
 
 
 class DBServices:
-    def create_table(self):
-        try:
-            sqlite_connection = sqlite3.connect('sqlite_python.db')
-            cursor = sqlite_connection.cursor()
-            sqlite_create_table_query = '''CREATE TABLE sneakers (
-                                            id INTEGER PRIMARY KEY,
-                                            Name TEXT NOT NULL,
-                                            Price INTEGER NOT NULL,
-                                            Count INTEGER NOT NULL,
-                                            Creator TEXT NOT NULL,
-                                            Size TEXT NOT NULL);'''
-            cursor.execute(sqlite_create_table_query)
-            sqlite_connection.commit()
-            cursor.close()
-            sqlite_connection.close()
-        except sqlite3.Error as error:
-            print(error)
-
     def add_sneaker(self, sneaker):
         try:
-            sqlite_connection = sqlite3.connect('sqlite_python.db')
-            cursor = sqlite_connection.cursor()
-            sqlite_insert_query = f"""INSERT INTO sneakers
-                                              (Name , Price, Count, Creator, Size)  
-                                              VALUES  ("{sneaker.name}", {sneaker.price}, {sneaker.count},
-                                              "{sneaker.creator}", "{sneaker.size}")"""
-            cursor.execute(sqlite_insert_query)
-            sqlite_connection.commit()
-            cursor.close()
-            sqlite_connection.close()
-        except sqlite3.Error as error:
+            count_products = session.query(Sneaker.count).filter(Sneaker.name == sneaker.name).one_or_none()
+            if count_products is not None:
+                session.query(Sneaker).filter(Sneaker.name == sneaker.name). \
+                    update({"count_products": count_products[0] + sneaker.count_products}, synchronize_session="fetch")
+            else:
+                session.add(sneaker)
+            session.commit()
+
+        except Exception as error:
             print(error)
 
-    def delete_sneaker(self, name):
+    def delete_sneaker_by_name(self, name):
         try:
-            sqlite_connection = sqlite3.connect('sqlite_python.db')
-            cursor = sqlite_connection.cursor()
-            sqlite_insert_query = f"""DELETE from sneakers where name = {name}"""
-            cursor.execute(sqlite_insert_query)
-            sqlite_connection.commit()
-            cursor.close()
-            sqlite_connection.close()
-        except sqlite3.Error as error:
+            session.query(Sneaker).filter(Sneaker.name == name) \
+                .delete(synchronize_session="fetch")
+
+            session.commit()
+            return True
+        except Exception as error:
             print(error)
+            return False
 
     def get_sneakers(self):
         try:
-            sqlite_connection = sqlite3.connect('sqlite_python.db')
-            cursor = sqlite_connection.cursor()
-            sqlite_insert_query = """select * from sneakers"""
-            cursor.execute(sqlite_insert_query)
-            result = cursor.fetchall()
-            cursor.close()
-            sqlite_connection.close()
-            return result
-        except sqlite3.Error as error:
+            return session.query(Sneaker).all()
+        except Exception as error:
             print(error)
 
 
 sneakers_service = SneakersService()
-while(True):
+while (True):
     print('1 - Add sneaker')
     print('2 - Delete sneaker')
     print('3 - Display all sneakers')
@@ -124,7 +116,7 @@ while(True):
         name = input('Input sneaker name: ')
         price = int(input('Input sneaker price: '))
         while price < 0:
-            price =  int(input('Incorrect price value, please try again: '))
+            price = int(input('Incorrect price value, please try again: '))
         count = int(input('Input sneaker count: '))
         while count < 1:
             count = int(input('Incorrect count value, please try again: '))
